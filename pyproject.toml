@@ -26,7 +26,8 @@ classifiers = [
 dependencies = [
   "pypaperless",
   "click",
-  "aiofile"
+  "aiofile",
+  "platformdirs"
 ]
 
 [project.optional-dependencies]
