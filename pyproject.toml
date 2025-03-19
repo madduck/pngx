@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.setuptools_scm]
+write_to = "_version.py"
+
+[project.scripts]
+pngx = "pngx.cli:main"
+
+[project]
+name = "pngx"
+version = "0.0.1"
+authors = [
+  { name="martin f. krafft", email="pngx@pobox.madduck.net" },
+]
+description = "A tool to interact with Paperless NGX"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+  "pypaperless",
+  "click",
+  "aiofile"
+]
+
+[project.optional-dependencies]
+dev= [
+  "ipdb",
+  "black",
+  "flake8"
+]
