@@ -50,6 +50,8 @@ $ pngx --help
 
 Usage: pngx [OPTIONS] COMMAND [ARGS]...
 
+  A command-line interface for Paperless NGX
+
 Options:
   -U, --url TEXT     URL to the Paperless NGX instance
   -T, --token TEXT   API token for Paperless NGX instance
@@ -77,8 +79,9 @@ tags_must_exist = true
 
 ```
 $ pngx upload --help
-
 Usage: pngx upload [OPTIONS] [FILENAMES]...
+
+  Upload files to Paperless NGX
 
 Options:
   -o, --owner TEXT            Owner for uploaded documents
@@ -99,6 +102,8 @@ Options:
 $ pngx tags --help
 Usage: pngx tags [OPTIONS] COMMAND [ARGS]...
 
+  Commands to manipulate tags in Paperless NGX
+
 Options:
   --help  Show this message and exit.
 
@@ -111,6 +116,8 @@ Commands:
 ```
 $ pngx tags list --help
 Usage: pngx tags list [OPTIONS]
+
+  List the available tags in Paperless NGX
 
 Options:
   -0, --zero  Use zero-delimiter instead of newlines

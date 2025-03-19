@@ -28,6 +28,7 @@ from .logger import get_logger, adjust_log_level
 )
 @click.pass_context
 def cli_base(ctx, verbose, quiet, url=None, token=None, config=None):
+    """A command-line interface for Paperless NGX"""
     logger = get_logger(__name__)
     adjust_log_level(logger, verbose, quiet=quiet)
 
@@ -98,6 +99,7 @@ async def upload(
     dateres,
     tries,
 ):
+    """Upload files to Paperless NGX"""
     tags_must_exist = tags_must_exist or pngx.config.get(
         "upload.tags_must_exist"
     )
@@ -123,7 +125,7 @@ async def upload(
 @click.pass_obj
 @asyncio_run
 async def tags(pngx):
-    pass
+    """Commands to manipulate tags in Paperless NGX"""
 
 
 @tags.command()
@@ -136,6 +138,7 @@ async def tags(pngx):
 @click.pass_obj
 @asyncio_run
 async def list(pngx, zero):
+    """List the available tags in Paperless NGX"""
     try:
         async with pngx.connect():
             tags = await pngx.tags()
