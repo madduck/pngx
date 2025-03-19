@@ -61,8 +61,8 @@ Options:
   --help             Show this message and exit.
 
 Commands:
-  tags
-  upload
+  tags    Commands to manipulate tags in Paperless NGX
+  upload  Upload files to Paperless NGX
 ```
 
 Instead of providing URL and API token with each call, you can also create a configuration file (default: `$XDG_CONFIG_DIR/pngx/config`) like so:
@@ -108,7 +108,7 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  list
+  list  List the available tags in Paperless NGX
 ```
 
 #### Listing tags
