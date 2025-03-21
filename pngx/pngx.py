@@ -27,7 +27,10 @@ class PaperlessNGX:
 
     class MissingTagError(Exception):
         def __init__(self, tag):
-            super().__init__(f"Tag '{tag}' does not exist (and upload.tags_must_exist is set)")
+            super().__init__(
+                f"Tag '{tag}' does not exist "
+                "(and upload.tags_must_exist is set)"
+            )
 
     def __init__(self, *, config, logger):
         self._config = config
@@ -206,8 +209,8 @@ class PaperlessNGX:
 
     @staticmethod
     def _get_creation_date(filename, dateres):
-        for re in dateres:
-            m = re.match(filename)
+        for rgx in dateres:
+            m = rgx.match(filename)
             if not m:
                 continue
 

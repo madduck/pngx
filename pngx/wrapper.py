@@ -46,4 +46,3 @@ class PaperlessObjectWrapper:
     async def get_all(self):
         await self._load_cache()
         return self._cache.copy()
-
