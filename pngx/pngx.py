@@ -25,12 +25,8 @@ class PaperlessNGX:
         def __init__(self, arg):
             super().__init__(f"No {arg} specified, and none in config")
 
-    class MissingTagError(Exception):
-        def __init__(self, tag):
-            super().__init__(
-                f"Tag '{tag}' does not exist "
-                "(and upload.tags_must_exist is set)"
-            )
+    class MissingObjectError(Exception):
+        pass
 
     def __init__(self, *, config, logger):
         self._config = config
@@ -137,31 +133,43 @@ class PaperlessNGX:
         matching_algorithm=MatchingAlgorithmType.NONE,
         color="#%06x" % random.randint(0, 2**24),
     ):
+        no_act = self._config.get("no_act")
         perms = await self._make_permission_table(groups)
-        try:
-            return [
-                await self._get_tag_id_by_name(
-                    t,
-                    make=make,
-                    make_args=dict(
-                        is_inbox_tag=is_inbox_tag,
-                        is_insensitive=is_insensitive,
-                        match=match,
-                        matching_algorithm=matching_algorithm,
-                        color=color,
-                    ),
-                    permissions_table=perms,
-                    owner=(
-                        await self._get_user_id_by_name(owner)
-                        if owner
-                        else None
-                    ),
+        ret = []
+        for t in tags:
+            try:
+                ret.append(
+                    await self._get_tag_id_by_name(
+                        t,
+                        make=make and not no_act,
+                        make_args=dict(
+                            is_inbox_tag=is_inbox_tag,
+                            is_insensitive=is_insensitive,
+                            match=match,
+                            matching_algorithm=matching_algorithm,
+                            color=color,
+                        ),
+                        permissions_table=perms,
+                        owner=(
+                            await self._get_user_id_by_name(owner)
+                            if owner
+                            else None
+                        ),
+                    )
                 )
-                for t in tags
-            ]
 
-        except KeyError as err:
-            raise self.MissingTagError(err.args[0])
+            except KeyError:
+                if no_act and not self._config.get("upload.tags_must_exist"):
+                    self._logger.info(f"Would try to create tag {t}")
+                    ret.append(t)
+                    continue
+
+                raise self.MissingObjectError(
+                    f"Tag '{t}' does not exist "
+                    "(and upload.tags_must_exist is set)"
+                )
+
+        return ret
 
     async def _get_or_make_correspondent(
         self,
@@ -170,17 +178,20 @@ class PaperlessNGX:
         owner,
         groups,
         make=True,
+        is_insensitive=True,
         match="",
         matching_algorithm=MatchingAlgorithmType.AUTO,
         color="#%06x" % random.randint(0, 2**24),
     ):
+        no_act = self._config.get("no_act")
         perms = await self._make_permission_table(groups)
         try:
             return await self._get_correspondent_id_by_name(
                 correspondent,
                 make=make,
-                make_args=dict(
+                tmake_args=dict(
                     match=match,
+                    is_insensitive=is_insensitive,
                     matching_algorithm=matching_algorithm,
                     color=color,
                 ),
@@ -190,8 +201,19 @@ class PaperlessNGX:
                 ),
             )
 
-        except KeyError as err:
-            raise self.MissingCorrespondentError(err.args[0])
+        except KeyError:
+            if no_act and not self._config.get(
+                "upload.correspondent_must_exist"
+            ):
+                self._logger.info(
+                    f"Would try to create correspondent {correspondent}"
+                )
+                return correspondent
+
+            raise self.MissingObjectError(
+                f"Correspondent '{correspondent}' does not exist "
+                "(and upload.correspondent_must_exist is set)"
+            )
 
     async def upload(
         self,
@@ -199,35 +221,40 @@ class PaperlessNGX:
         *,
         owner=None,
         groups=None,
-        spacereplaces=None,
-        dateres=None,
         tries=1,
     ):
         if self._api is None:
             raise RuntimeError("API is not connected")
 
-        if dateres:
+        if dateres := self._config.get("upload.dateres"):
             dateres = [re.compile(r) for r in dateres]
 
-        if spacereplaces:
+        if spacereplaces := self._config.get("upload.spacereplaces"):
             spacereplaces = [re.compile(c) for c in spacereplaces]
 
-        tags_must_exist = self._config("upload.tags_must_exist")
-        tags = self._config("upload.tags")
+        tags_must_exist = self._config.get("upload.tags_must_exist")
+        tags = self._config.get("upload.tags", [])
         tags = await self._get_or_make_tags(
             tags, make=not tags_must_exist, owner=owner, groups=groups
         )
 
-        correspondent_must_exist = self._config(
-            "upload.correspondent_must_exist"
-        )
-        correspondent = self._config("upload.correspondent")
-        correspondent = await self._get_or_make_correspondent(
-            correspondent,
-            make=not correspondent_must_exist,
-            owner=owner,
-            groups=groups,
-        )
+        if correspondent:
+            try:
+                _correspondent = await self._get_or_make_correspondent(
+                    correspondent,
+                    make=not correspondent_must_exist and not self._no_act,
+                    owner=owner,
+                    groups=groups,
+                )
+                if not self._no_act:
+                    correspondent = _correspondent
+            except self.MissingObjectError:
+                if self._no_act and not correspondent_must_exist:
+                    logger.info(
+                        f"Would try to create correspondent: {correspondent}"
+                    )
+                else:
+                    raise
 
         try:
             return await asyncio.gather(
@@ -252,6 +279,8 @@ class PaperlessNGX:
 
     @staticmethod
     def _make_title(filename, spacereplaces):
+        if not spacereplaces:
+            return filename
         cur = filename
         for char in spacereplaces:
             cur = re.sub(char, r" ", cur)
@@ -284,32 +313,51 @@ class PaperlessNGX:
         dateres=None,
         tries=1,
     ):
-        creationdate, remainder = self._get_creation_date(
-            str(file.stem), dateres
-        )
-        if creationdate:
-            self._logger.debug(
-                f"Extracted date {creationdate} from filename {file}"
+        remainder = str(file.stem)
+        if dateres:
+            creationdate, remainder = self._get_creation_date(
+                remainder, dateres
             )
+            if creationdate:
+                self._logger.debug(
+                    f"Extracted date {creationdate} from filename {file}"
+                )
+            else:
+                self._logger.debug(
+                    f"Failed to extract date from filename {file}"
+                )
         else:
-            self._logger.debug(f"Failed to extract date from filename {file}")
+            creationdate = None
 
         title = self._make_title(remainder or str(file.stem), spacereplaces)
+
         self._logger.debug(f"Title extracted from {file}: {title}")
 
+        async def _do_upload(**kwargs):
+            if self._config.get("no_act"):
+                self._logger.info(f"Would upload file {file}:")
+                del kwargs["filename"]
+                for k, v in kwargs.items():
+                    if v is not None and v != []:
+                        self._logger.info(f"  {k}: {v}")
+                return None
+            else:
+                async with async_open(file, "rb") as f:
+                    draft = self._api.documents.draft(
+                        document=await f.read(), **kwargs
+                    )
+                    taskid = await draft.save()
+                self._logger.info(f"File {file} uploaded, task ID {taskid}")
+                return taskid
+
         try:
-            async with async_open(file, "rb") as f:
-                draft = self._api.documents.draft(
-                    document=await f.read(),
-                    filename=file.name,
-                    title=title,
-                    tags=tags,
-                    correspondent=correspondent,
-                    created=creationdate,
-                )
-                taskid = await draft.save()
-            self._logger.info(f"File {file} uploaded, task ID {taskid}")
-            return taskid
+            return await _do_upload(
+                filename=file.name,
+                title=title,
+                tags=tags,
+                correspondent=correspondent,
+                created=creationdate,
+            )
 
         except aiohttp.client_exceptions.ServerTimeoutError as err:
             self._logger.warning(
