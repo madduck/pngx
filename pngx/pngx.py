@@ -226,12 +226,6 @@ class PaperlessNGX:
         if self._api is None:
             raise RuntimeError("API is not connected")
 
-        if dateres := self._config.get("upload.dateres"):
-            dateres = [re.compile(r) for r in dateres]
-
-        if spacereplaces := self._config.get("upload.spacereplaces"):
-            spacereplaces = [re.compile(c) for c in spacereplaces]
-
         tags_must_exist = self._config.get("upload.tags_must_exist")
         tags = self._config.get("upload.tags", [])
         tags = await self._get_or_make_tags(
@@ -256,6 +250,9 @@ class PaperlessNGX:
                 else:
                     raise
 
+        dateres = self._config.get("upload.dateres")
+        nameres = self._config.get("upload.nameres")
+
         try:
             return await asyncio.gather(
                 *[
@@ -265,8 +262,8 @@ class PaperlessNGX:
                         groups=groups,
                         tags=tags,
                         correspondent=correspondent,
-                        spacereplaces=spacereplaces,
                         dateres=dateres,
+                        nameres=nameres,
                     )
                     for file in filenames
                 ]
@@ -277,15 +274,28 @@ class PaperlessNGX:
 
         return None
 
-    @staticmethod
-    def _make_title(filename, spacereplaces):
-        if not spacereplaces:
-            return filename
-        cur = filename
-        for char in spacereplaces:
-            cur = re.sub(char, r" ", cur)
+    def _make_title(self, filename, nameres):
 
-        return cur
+        for rgx in nameres or []:
+
+            if rgx[0] == "s":
+                delim = rgx[1]
+                parts = rgx.split(delim)
+                if len(parts) not in (3, 4):
+                    self._logger.error(f"Invalid regular expression: {rgx}")
+                    continue
+
+                res = re.sub(parts[1], parts[2], filename)
+                self._logger.debug(f"namere: {filename} ~= {rgx} → {res}")
+                filename = res
+
+            else:
+                self._logger.error(
+                    f"Regular expression must start with 's': {rgx}"
+                )
+                continue
+
+        return filename
 
     @staticmethod
     def _get_creation_date(filename, dateres):
@@ -309,15 +319,13 @@ class PaperlessNGX:
         groups,
         tags,
         correspondent,
-        spacereplaces=None,
         dateres=None,
+        nameres=None,
         tries=1,
     ):
-        remainder = str(file.stem)
+        filename = str(file.stem)
         if dateres:
-            creationdate, remainder = self._get_creation_date(
-                remainder, dateres
-            )
+            creationdate, filename = self._get_creation_date(filename, dateres)
             if creationdate:
                 self._logger.debug(
                     f"Extracted date {creationdate} from filename {file}"
@@ -329,7 +337,7 @@ class PaperlessNGX:
         else:
             creationdate = None
 
-        title = self._make_title(remainder or str(file.stem), spacereplaces)
+        title = self._make_title(filename or str(file.stem), nameres)
 
         self._logger.debug(f"Title extracted from {file}: {title}")
 
@@ -391,7 +399,7 @@ class PaperlessNGX:
                 groups=groups,
                 tags=tags,
                 dateres=dateres,
-                spacereplaces=spacereplaces,
+                nameres=nameres,
                 tries=tries,
             )
 

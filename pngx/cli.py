@@ -112,13 +112,6 @@ def cli_base(
     ),
 )
 @click.option(
-    "--replace-with-spaces",
-    "spacereplaces",
-    multiple=True,
-    default=["_"],
-    help="Characters in filenames to replace with spaces",
-)
-@click.option(
     "--datere",
     "dateres",
     multiple=True,
@@ -151,7 +144,6 @@ async def upload(
     correspondent_must_exist,
     tags,
     tags_must_exist,
-    spacereplaces,
     dateres,
     nameres,
     tries,
