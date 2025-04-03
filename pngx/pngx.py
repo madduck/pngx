@@ -76,6 +76,9 @@ class PaperlessNGX:
             )
             self._api_groups = PaperlessObjectWrapper(self._api.groups)
             self._api_tags = PaperlessObjectWrapper(self._api.tags)
+            self._api_correspondents = PaperlessObjectWrapper(
+                self._api.correspondents
+            )
             self._api_doctypes = PaperlessObjectWrapper(
                 self._api.document_types
             )
@@ -86,6 +89,7 @@ class PaperlessNGX:
         self._api_users = None
         self._api_groups = None
         self._api_tags = None
+        self._api_correspondents = None
         self._api_doctypes = None
 
     async def _get_user_id_by_name(self, username, **args):
@@ -96,6 +100,11 @@ class PaperlessNGX:
 
     async def _get_tag_id_by_name(self, tagname, **args):
         return await self._api_tags.get_id_by_name(tagname, **args)
+
+    async def _get_correspondent_id_by_name(self, correspondent, **args):
+        return await self._api_correspondents.get_id_by_name(
+            correspondent, **args
+        )
 
     async def _get_doctype_id_by_name(self, doctype, **args):
         return await self._api_doctypes.get_id_by_name(doctype, **args)
@@ -154,14 +163,44 @@ class PaperlessNGX:
         except KeyError as err:
             raise self.MissingTagError(err.args[0])
 
+    async def _get_or_make_correspondent(
+        self,
+        correspondent,
+        *,
+        owner,
+        groups,
+        make=True,
+        match="",
+        matching_algorithm=MatchingAlgorithmType.AUTO,
+        color="#%06x" % random.randint(0, 2**24),
+    ):
+        perms = await self._make_permission_table(groups)
+        try:
+            return await self._get_correspondent_id_by_name(
+                correspondent,
+                make=make,
+                make_args=dict(
+                    match=match,
+                    matching_algorithm=matching_algorithm,
+                    color=color,
+                ),
+                permissions_table=perms,
+                owner=(
+                    await self._get_user_id_by_name(owner)
+                    if owner
+                    else None
+                ),
+            )
+
+        except KeyError as err:
+            raise self.MissingCorrespondentError(err.args[0])
+
     async def upload(
         self,
         filenames,
         *,
         owner=None,
         groups=None,
-        tags=None,
-        tags_must_exist=None,
         spacereplaces=None,
         dateres=None,
         tries=1,
@@ -175,8 +214,21 @@ class PaperlessNGX:
         if spacereplaces:
             spacereplaces = [re.compile(c) for c in spacereplaces]
 
+        tags_must_exist = self._config("upload.tags_must_exist")
+        tags = self._config("upload.tags")
         tags = await self._get_or_make_tags(
             tags, make=not tags_must_exist, owner=owner, groups=groups
+        )
+
+        correspondent_must_exist = self._config(
+            "upload.correspondent_must_exist"
+        )
+        correspondent = self._config("upload.correspondent")
+        correspondent = await self._get_or_make_correspondent(
+            correspondent,
+            make=not correspondent_must_exist,
+            owner=owner,
+            groups=groups,
         )
 
         try:
@@ -187,6 +239,7 @@ class PaperlessNGX:
                         owner=owner,
                         groups=groups,
                         tags=tags,
+                        correspondent=correspondent,
                         spacereplaces=spacereplaces,
                         dateres=dateres,
                     )
@@ -228,6 +281,7 @@ class PaperlessNGX:
         owner,
         groups,
         tags,
+        correspondent,
         spacereplaces=None,
         dateres=None,
         tries=1,
@@ -252,6 +306,7 @@ class PaperlessNGX:
                     filename=file.name,
                     title=title,
                     tags=tags,
+                    correspondent=correspondent,
                     created=creationdate,
                 )
                 taskid = await draft.save()

@@ -51,6 +51,19 @@ def cli_base(ctx, verbose, quiet, url=None, token=None, config=None):
     help="Groups for uploaded documents",
 )
 @click.option(
+    "--correspondent",
+    "-c",
+    help="Correspondent for uploaded documents",
+)
+@click.option(
+    "--correspondent-must-exist",
+    is_flag=True,
+    help=(
+        "Correspondent will not be created, but an error produced "
+        "if correspondent does not exist"
+    ),
+)
+@click.option(
     "--tag",
     "-t",
     "tags",
@@ -96,6 +109,8 @@ async def upload(
     filenames,
     owner,
     groups,
+    correspondent,
+    correspondent_must_exist,
     tags,
     tags_must_exist,
     spacereplaces,
@@ -103,9 +118,10 @@ async def upload(
     tries,
 ):
     """Upload files to Paperless NGX"""
-    tags_must_exist = tags_must_exist or pngx.config.get(
-        "upload.tags_must_exist"
-    )
+
+    for setting in ("tags_must_exist", "correspondent_must_exist"):
+        if locals()[setting] is not None:
+            pngx.config.set(f"upload.{setting}", locals()[setting])
 
     try:
         async with pngx.connect():
@@ -113,8 +129,6 @@ async def upload(
                 filenames,
                 owner=owner,
                 groups=groups,
-                tags=tags,
-                tags_must_exist=tags_must_exist,
                 spacereplaces=spacereplaces,
                 dateres=dateres,
                 tries=tries,
