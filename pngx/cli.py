@@ -4,7 +4,7 @@ import sys
 import click
 import pathlib
 
-from pngx.config import Config
+from pngx.config import Config, merge_cli_opts_into_cfg
 from pngx.pngx import PaperlessNGX
 from pngx.asyncio import asyncio_run
 
@@ -21,22 +21,56 @@ from .logger import get_logger, adjust_log_level
     type=click.Path(path_type=pathlib.Path),
 )
 @click.option(
-    "--verbose", "-v", count=True, help="Increase verbosity of log output"
+    "--no-act",
+    "-n",
+    is_flag=True,
+    help=("Do not actually act, " "just show what would be done"),
 )
 @click.option(
-    "--quiet", "-q", is_flag=True, help="Increase verbosity of log output"
+    "--verbose",
+    "-v",
+    count=True,
+    help="Increase verbosity of log output",
+)
+@click.option(
+    "--quiet",
+    "-q",
+    is_flag=True,
+    help="Increase verbosity of log output",
 )
 @click.pass_context
-def cli_base(ctx, verbose, quiet, url=None, token=None, config=None):
+def cli_base(
+    ctx,
+    no_act,
+    verbose,
+    quiet,
+    url,
+    token,
+    config,
+):
     """A command-line interface for Paperless NGX"""
+    explicit_cli_opts = {
+        k: v
+        for k, v in locals().items()
+        if ctx.get_parameter_source(k)
+        not in (
+            click.core.ParameterSource.DEFAULT,
+            click.core.ParameterSource.DEFAULT_MAP,
+        )
+    }
+    cfg = Config(config)
+    merge_cli_opts_into_cfg(
+        explicit_cli_opts,
+        cfg,
+        exclude=("ctx", "cfg", "config", "verbose", "quiet"),
+    )
+
+    if no_act:
+        if verbose <= 1:
+            verbose = 1
+
     logger = get_logger(__name__)
     adjust_log_level(logger, verbose, quiet=quiet)
-
-    cfg = Config(config)
-    if url:
-        cfg.set("url", url)
-    if token:
-        cfg.set("token", token)
 
     ctx.obj = ctx.with_resource(PaperlessNGX(config=cfg, logger=logger))
 
@@ -56,7 +90,7 @@ def cli_base(ctx, verbose, quiet, url=None, token=None, config=None):
     help="Correspondent for uploaded documents",
 )
 @click.option(
-    "--correspondent-must-exist",
+    "--correspondent-must-exist/--make-missing-correspondent",
     is_flag=True,
     help=(
         "Correspondent will not be created, but an error produced "
@@ -71,8 +105,7 @@ def cli_base(ctx, verbose, quiet, url=None, token=None, config=None):
     help="Tags to assign to the documents",
 )
 @click.option(
-    "--tags-must-exist",
-    is_flag=True,
+    "--tags-must-exist/--make-missing-tags",
     help=(
         "Tags will not be created, but an error produced "
         "if a tag does not exist"
@@ -95,16 +128,22 @@ def cli_base(ctx, verbose, quiet, url=None, token=None, config=None):
     help="Python regular expressions to extract date and remainder groups",
 )
 @click.option(
+    "--namere",
+    "nameres",
+    multiple=True,
+    help="Python regular expressions to manipulate document name",
+)
+@click.option(
     "--tries",
     type=click.IntRange(min=1),
     default=3,
     help="Retry this many times to upload documents",
 )
 @click.argument("filenames", type=click.Path(path_type=pathlib.Path), nargs=-1)
-@click.pass_obj
+@click.pass_context
 @asyncio_run
 async def upload(
-    pngx,
+    ctx,
     filenames,
     owner,
     groups,
@@ -118,21 +157,23 @@ async def upload(
     tries,
 ):
     """Upload files to Paperless NGX"""
-
-    for setting in ("tags_must_exist", "correspondent_must_exist", "tries"):
-        if locals()[setting] is not None:
-            pngx.config.set(f"upload.{setting}", locals()[setting])
-
-    for listsetting in ("spacereplaces", "dateres", "nameres", "tags"):
-        pngx.config.set(
-            f"upload.{listsetting}",
-            pngx.config.get(f"upload.{listsetting}", [])
-            + locals()[listsetting],
+    explicit_cli_opts = {
+        k: v
+        for k, v in locals().items()
+        if ctx.get_parameter_source(k)
+        not in (
+            click.core.ParameterSource.DEFAULT,
+            click.core.ParameterSource.DEFAULT_MAP,
         )
+    }
+    pngx = ctx.obj
+    merge_cli_opts_into_cfg(
+        explicit_cli_opts, pngx.config, exclude=("pngx"), path="upload"
+    )
 
     try:
         async with pngx.connect():
-            await pngx.upload(filenames, owner=owner, groups=groups, tags=tags)
+            await pngx.upload(filenames, owner=owner, groups=groups)
 
     except PaperlessNGX.Exception as err:
         raise click.UsageError(str(err))
@@ -145,7 +186,7 @@ async def tags(pngx):
     """Commands to manipulate tags in Paperless NGX"""
 
 
-@tags.command()
+@tags.command(name="list")
 @click.option(
     "--zero",
     "-0",
@@ -154,7 +195,7 @@ async def tags(pngx):
 )
 @click.pass_obj
 @asyncio_run
-async def list(pngx, zero):
+async def taglist(pngx, zero):
     """List the available tags in Paperless NGX"""
     try:
         async with pngx.connect():

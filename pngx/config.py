@@ -33,4 +33,32 @@ class Config:
             raise KeyError(key)
 
     def set(self, key, value):
-        self._data[key] = value
+        d = self._data
+        keys = key.split(".")
+        for k in keys[:-1]:
+            d = d.setdefault(k, {})
+
+        d[keys[-1]] = value
+
+
+def merge_cli_opts_into_cfg(
+    opts, cfg, *, path=None, exclude=None, typemap=None
+):
+    exclude = () if exclude is None else exclude
+    typemap = {} if typemap is None else typemap
+
+    for opt, val in opts.items():
+        if opt in exclude:
+            continue
+
+        elif val is not None:
+            tgt = ".".join((path, opt)) if path else opt
+            val = typemap.get(tgt, lambda s: s)(val)
+            if cur := cfg.get(tgt):
+                try:
+                    cur.extend(val)
+                except AttributeError:
+                    pass
+                else:
+                    val = cur
+            cfg.set(tgt, val)
