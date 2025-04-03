@@ -114,24 +114,25 @@ async def upload(
     tags_must_exist,
     spacereplaces,
     dateres,
+    nameres,
     tries,
 ):
     """Upload files to Paperless NGX"""
 
-    for setting in ("tags_must_exist", "correspondent_must_exist"):
+    for setting in ("tags_must_exist", "correspondent_must_exist", "tries"):
         if locals()[setting] is not None:
             pngx.config.set(f"upload.{setting}", locals()[setting])
 
+    for listsetting in ("spacereplaces", "dateres", "nameres", "tags"):
+        pngx.config.set(
+            f"upload.{listsetting}",
+            pngx.config.get(f"upload.{listsetting}", [])
+            + locals()[listsetting],
+        )
+
     try:
         async with pngx.connect():
-            await pngx.upload(
-                filenames,
-                owner=owner,
-                groups=groups,
-                spacereplaces=spacereplaces,
-                dateres=dateres,
-                tries=tries,
-            )
+            await pngx.upload(filenames, owner=owner, groups=groups, tags=tags)
 
     except PaperlessNGX.Exception as err:
         raise click.UsageError(str(err))

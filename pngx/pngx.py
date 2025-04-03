@@ -186,9 +186,7 @@ class PaperlessNGX:
                 ),
                 permissions_table=perms,
                 owner=(
-                    await self._get_user_id_by_name(owner)
-                    if owner
-                    else None
+                    await self._get_user_id_by_name(owner) if owner else None
                 ),
             )
 
