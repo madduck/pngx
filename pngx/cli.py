@@ -92,7 +92,7 @@ def cli_base(ctx, verbose, quiet, url=None, token=None, config=None):
     default=[
         r"^(?:.*/)?(?P<date>\d{4}[-.]\d{2}[-.]\d{2})[-.]?(?P<remainder>.*)$"
     ],
-    help="Python regular expressions to extract date",
+    help="Python regular expressions to extract date and remainder groups",
 )
 @click.option(
     "--tries",
