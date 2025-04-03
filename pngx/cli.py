@@ -72,7 +72,6 @@ def cli_base(ctx, verbose, quiet, url=None, token=None, config=None):
 )
 @click.option(
     "--tags-must-exist",
-    "-x",
     is_flag=True,
     help=(
         "Tags will not be created, but an error produced "
