@@ -3,6 +3,9 @@ import click
 from pngx.asyncio import asyncio_run
 from pngx.pngx import PaperlessNGX
 from pngx.config import merge_config
+from pngx.logger import get_logger
+
+_logger = get_logger(__name__)
 
 
 @click.group()

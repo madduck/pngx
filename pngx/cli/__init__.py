@@ -7,7 +7,7 @@ from pngx.config import (
     config_file_option,
     merge_config,
 )
-from pngx.logger import get_logger, adjust_log_level
+from pngx.logger import get_logger, log_level_from_cli
 from pngx.pngx import PaperlessNGX
 
 from .tags import tags
@@ -48,15 +48,16 @@ def pngx(
     quiet,
 ):
     """A command-line interface for Paperless NGX"""
-    if no_act:
-        if verbose <= 1:
-            verbose = 1
+    if no_act and verbose <= 1:
+        verbose = 1
 
-    logger = get_logger(__name__)
-    adjust_log_level(logger, verbose, quiet=quiet)
+    # set up the base logger;
+    # even if we don't need it, it is the basis for sub loggers
+    logger = get_logger()
+    log_level_from_cli(logger, verbose, quiet=quiet)
 
     ctx.obj = ctx.with_resource(
-        PaperlessNGX(url=url, token=token, no_act=no_act, logger=logger)
+        PaperlessNGX(url=url, token=token, no_act=no_act)
     )
 
 
