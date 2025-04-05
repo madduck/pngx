@@ -1,7 +1,7 @@
 import click
 import pathlib
 
-from pngx.config import merge_cli_opts_into_cfg
+from pngx.config import merge_config
 from pngx.asyncio import asyncio_run
 from pngx.pngx import PaperlessNGX
 
@@ -46,9 +46,6 @@ from pngx.pngx import PaperlessNGX
     "--datere",
     "dateres",
     multiple=True,
-    default=[
-        r"^(?:.*/)?(?P<date>\d{4}[-.]\d{2}[-.]\d{2})[-.]?(?P<remainder>.*)$"
-    ],
     help="Python regular expressions to extract date and remainder groups",
 )
 @click.option(
@@ -64,10 +61,11 @@ from pngx.pngx import PaperlessNGX
     help="Retry this many times to upload documents",
 )
 @click.argument("filenames", type=click.Path(path_type=pathlib.Path), nargs=-1)
-@click.pass_context
+@merge_config
+@click.pass_obj
 @asyncio_run
 async def upload(
-    ctx,
+    pngx,
     filenames,
     owner,
     groups,
@@ -80,23 +78,20 @@ async def upload(
     tries,
 ):
     """Upload files to Paperless NGX"""
-    explicit_cli_opts = {
-        k: v
-        for k, v in locals().items()
-        if ctx.get_parameter_source(k)
-        not in (
-            click.core.ParameterSource.DEFAULT,
-            click.core.ParameterSource.DEFAULT_MAP,
-        )
-    }
-    pngx = ctx.obj
-    merge_cli_opts_into_cfg(
-        explicit_cli_opts, pngx.config, exclude=("pngx"), path="upload"
-    )
-
     try:
         async with pngx.connect():
-            await pngx.upload(filenames, owner=owner, groups=groups)
+            await pngx.upload(
+                filenames,
+                owner=owner,
+                groups=groups,
+                correspondent=correspondent,
+                correspondent_must_exist=correspondent_must_exist,
+                tags=tags,
+                tags_must_exist=tags_must_exist,
+                dateres=dateres,
+                nameres=nameres,
+                tries=tries,
+            )
 
     except PaperlessNGX.Exception as err:
         raise click.UsageError(str(err))
