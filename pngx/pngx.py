@@ -14,6 +14,9 @@ from pypaperless.models.common import (
 )
 
 from pngx.wrapper import PaperlessObjectWrapper
+from pngx.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class PaperlessNGX:
@@ -28,8 +31,7 @@ class PaperlessNGX:
     class MissingObjectError(Exception):
         pass
 
-    def __init__(self, *, url, token, logger, no_act=False):
-        self._logger = logger
+    def __init__(self, *, url, token, no_act=False):
         self._timeout = aiohttp.ClientTimeout(
             connect=30, sock_connect=30, sock_read=120
         )
@@ -255,7 +257,7 @@ class PaperlessNGX:
 =======
         except self.MissingObjectError:
             if self._no_act and not tags_must_exist:
-                self._logger.info(f"Would try to create tags: {tags}")
+                logger.info(f"Would try to create tags: {tags}")
             else:
                 raise
 >>>>>>> 3c0eac0 (Rework of config file handling)
@@ -270,7 +272,7 @@ class PaperlessNGX:
                 )
             except self.MissingObjectError:
                 if self._no_act and not correspondent_must_exist:
-                    self._logger.info(
+                    logger.info(
                         f"Would try to create correspondent: {correspondent}"
                     )
                 else:
@@ -293,7 +295,7 @@ class PaperlessNGX:
             )
 
         except aiohttp.client_exceptions.ClientResponseError as err:
-            self._logger.error(f"API request denied: {err}")
+            logger.error(f"API request denied: {err}")
 
         return None
 
@@ -305,17 +307,15 @@ class PaperlessNGX:
                 delim = rgx[1]
                 parts = rgx.split(delim)
                 if len(parts) not in (3, 4):
-                    self._logger.error(f"Invalid regular expression: {rgx}")
+                    logger.error(f"Invalid regular expression: {rgx}")
                     continue
 
                 res = re.sub(parts[1], parts[2], filename)
-                self._logger.debug(f"namere: {filename} ~= {rgx} → {res}")
+                logger.debug(f"namere: {filename} ~= {rgx} → {res}")
                 filename = res
 
             else:
-                self._logger.error(
-                    f"Regular expression must start with 's': {rgx}"
-                )
+                logger.error(f"Regular expression must start with 's': {rgx}")
                 continue
 
         return filename
@@ -350,27 +350,25 @@ class PaperlessNGX:
         if dateres:
             creationdate, filename = self._get_creation_date(filename, dateres)
             if creationdate:
-                self._logger.debug(
+                logger.debug(
                     f"Extracted date {creationdate} from filename {file}"
                 )
             else:
-                self._logger.debug(
-                    f"Failed to extract date from filename {file}"
-                )
+                logger.debug(f"Failed to extract date from filename {file}")
         else:
             creationdate = None
 
         title = self._make_title(filename or str(file.stem), nameres)
 
-        self._logger.debug(f"Title extracted from {file}: {title}")
+        logger.debug(f"Title extracted from {file}: {title}")
 
         async def _do_upload(**kwargs):
             if self._no_act:
-                self._logger.info(f"Would upload file {file}:")
+                logger.info(f"Would upload file {file}:")
                 del kwargs["filename"]
                 for k, v in kwargs.items():
                     if v is not None and v != []:
-                        self._logger.info(f"  {k}: {v}")
+                        logger.info(f"  {k}: {v}")
                 return None
             else:
                 async with async_open(file, "rb") as f:
@@ -378,7 +376,7 @@ class PaperlessNGX:
                         document=await f.read(), **kwargs
                     )
                     taskid = await draft.save()
-                self._logger.info(f"File {file} uploaded, task ID {taskid}")
+                logger.info(f"File {file} uploaded, task ID {taskid}")
                 return taskid
 
         try:
@@ -391,28 +389,28 @@ class PaperlessNGX:
             )
 
         except aiohttp.client_exceptions.ServerTimeoutError as err:
-            self._logger.warning(
+            logger.warning(
                 "Connection problem during upload " f"of file {file}: {err}"
             )
 
         except pypaperless.exceptions.BadJsonResponseError as err:
-            self._logger.warning(
+            logger.warning(
                 "Paperless reported an error with the upload "
                 f"of file {file}: {err}"
             )
 
         except FileNotFoundError as err:
-            self._logger.error(f"File not found: {err.filename}")
+            logger.error(f"File not found: {err.filename}")
             return
 
         except Exception as err:
-            self._logger.exception(
+            logger.exception(
                 "Received other exception during upload "
                 f"of file {file}: {err}"
             )
 
         if (tries := tries - 1) > 0:
-            self._logger.info(
+            logger.info(
                 f"Upload of {file} failed, " f"retrying {tries} time(s)…"
             )
             await asyncio.sleep(1)
@@ -427,7 +425,7 @@ class PaperlessNGX:
             )
 
         else:
-            self._logger.error(f"Upload of {file} failed all retries.")
+            logger.error(f"Upload of {file} failed all retries.")
             return
 
     async def tags(self):
