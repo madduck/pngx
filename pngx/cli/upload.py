@@ -1,7 +1,6 @@
 import click
 import pathlib
 
-from pngx.config import merge_config
 from pngx.asyncio import asyncio_run
 from pngx.pngx import PaperlessNGX
 
@@ -61,7 +60,6 @@ from pngx.pngx import PaperlessNGX
     help="Retry this many times to upload documents",
 )
 @click.argument("filenames", type=click.Path(path_type=pathlib.Path), nargs=-1)
-@merge_config
 @click.pass_obj
 @asyncio_run
 async def upload(

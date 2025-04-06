@@ -2,10 +2,6 @@ import click
 
 from pngx.asyncio import asyncio_run
 from pngx.pngx import PaperlessNGX
-from pngx.config import merge_config
-from pngx.logger import get_logger
-
-_logger = get_logger(__name__)
 
 
 @click.group()
@@ -27,7 +23,6 @@ async def tags(pngx):
     is_flag=True,
     help="Include the tag IDs in the output",
 )
-@merge_config
 @click.pass_obj
 @asyncio_run
 async def taglist(pngx, zero, ids):

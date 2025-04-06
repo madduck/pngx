@@ -3,6 +3,7 @@ import aiohttp
 from aiofile import async_open
 import contextlib
 import re
+import logging
 
 import random
 from pypaperless import Paperless
@@ -14,9 +15,8 @@ from pypaperless.models.common import (
 )
 
 from pngx.wrapper import PaperlessObjectWrapper
-from pngx.logger import get_logger
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class PaperlessNGX:

@@ -2,13 +2,10 @@
 
 import sys
 import click
+import click_extra as clickx
+import logging
 from yarl import URL
 
-from pngx.config import (
-    config_file_option,
-    merge_config,
-)
-from pngx.logger import get_logger, log_level_from_cli, silence_other_loggers
 from pngx.pngx import PaperlessNGX
 
 from .tags import tags
@@ -32,13 +29,23 @@ def validate_url(ctx, param, value):
             raise click.BadParameter(f"Not a valid URL: {value}")
 
 
+logging.getLogger("click_extra").setLevel(logging.WARNING)
+logger = clickx.new_extra_logger(
+    format=("{asctime} {name} {levelname} {message} " "({filename}:{lineno})"),
+    datefmt="%F %T",
+    level=logging.WARNING,
+)
+logging.getLogger("asyncio").setLevel(logging.WARNING)
+
+
 @click.group
-@config_file_option
-@merge_config
+@clickx.config_option(show_default=True)
+# @clickx.verbosity_option(default_logger=logger)
+@clickx.verbose_option(default_logger=logger)
 @click.option(
     "--url",
     "-U",
-    # required=True,
+    required=True,
     help="URL to the Paperless NGX instance",
     callback=validate_url,
 )
@@ -46,40 +53,27 @@ def validate_url(ctx, param, value):
 @click.option(
     "--no-act",
     "-n",
+    required=True,
     is_flag=True,
     help=("Do not actually act, " "just show what would be done"),
-)
-@click.option(
-    "--verbose",
-    "-v",
-    count=True,
-    help="Increase verbosity of log output",
-)
-@click.option(
-    "--quiet",
-    "-q",
-    is_flag=True,
-    help="Increase verbosity of log output",
 )
 @click.pass_context
 def pngx(
     ctx,
-    config,
     url,
     token,
     no_act,
-    verbose,
-    quiet,
 ):
     """A command-line interface for Paperless NGX"""
-    if no_act and verbose <= 1:
-        verbose = 1
+    # if no_act and verbose <= 1:
+    #    verbose = 1
 
     # set up the base logger;
     # even if we don't need it, it is the basis for sub loggers
-    logger = get_logger()
-    log_level_from_cli(logger, verbose, quiet=quiet)
-    silence_other_loggers(f"pypaperless[{url.host}]", "asyncio")
+    # logger = get_logger()
+    # log_level_from_cli(logger, verbose, quiet=quiet)
+    # silence_other_loggers(f"pypaperless[{url.host}]", "asyncio")
+    logging.getLogger(f"pypaperless[{url.host}]").setLevel(logging.WARNING)
 
     ctx.obj = ctx.with_resource(
         PaperlessNGX(url=url, token=token, no_act=no_act)
