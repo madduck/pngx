@@ -2,6 +2,7 @@
 
 import sys
 import click
+from yarl import URL
 
 from pngx.config import (
     config_file_option,
@@ -14,10 +15,33 @@ from .tags import tags
 from .upload import upload
 
 
+def validate_url(ctx, param, value):
+    if value is not None:
+        try:
+            url = URL(value)
+            if not url.is_absolute():
+                raise click.BadParameter(f"URL is not absolute: {value}")
+            return url
+
+        except TypeError:
+            raise click.BadParameter(
+                f"URLs must be strings, not '{type(value).__name__}': {value}"
+            )
+
+        except ValueError:
+            raise click.BadParameter(f"Not a valid URL: {value}")
+
+
 @click.group
 @config_file_option
 @merge_config
-@click.option("--url", "-U", help="URL to the Paperless NGX instance")
+@click.option(
+    "--url",
+    "-U",
+    # required=True,
+    help="URL to the Paperless NGX instance",
+    callback=validate_url,
+)
 @click.option("--token", "-T", help="API token for Paperless NGX instance")
 @click.option(
     "--no-act",
