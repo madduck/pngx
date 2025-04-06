@@ -96,6 +96,16 @@ def log_level_from_cli(logger, verbosity, *, quiet=False):
     logger.setLevel(loglevel)
 
 
+def silence_other_loggers(*others, maxlevel=logging.TRACE):
+    rootlogger = logging.getLogger()
+    if rootlogger.getEffectiveLevel() <= maxlevel:
+        return
+
+    for loggername in others:
+        logger = logging.getLogger(loggername)
+        logger.propagate = False
+
+
 class IncludeExtraInfoAdapter(logging.LoggerAdapter):
 
     def process(self, msg, kwargs):

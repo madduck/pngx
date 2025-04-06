@@ -7,7 +7,7 @@ from pngx.config import (
     config_file_option,
     merge_config,
 )
-from pngx.logger import get_logger, log_level_from_cli
+from pngx.logger import get_logger, log_level_from_cli, silence_other_loggers
 from pngx.pngx import PaperlessNGX
 
 from .tags import tags
@@ -55,6 +55,7 @@ def pngx(
     # even if we don't need it, it is the basis for sub loggers
     logger = get_logger()
     log_level_from_cli(logger, verbose, quiet=quiet)
+    silence_other_loggers(f"pypaperless[{url.host}]", "asyncio")
 
     ctx.obj = ctx.with_resource(
         PaperlessNGX(url=url, token=token, no_act=no_act)
