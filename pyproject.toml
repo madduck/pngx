@@ -35,6 +35,7 @@ dev= [
   "ipdb",
   "black",
   "flake8",
+  "mypy",
   "pre-commit"
 ]
 
@@ -48,3 +49,11 @@ exclude = '''
   | .direnv
 )/
 '''
+
+[tool.mypy]
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["ipdb"]
+ignore_missing_imports = true
