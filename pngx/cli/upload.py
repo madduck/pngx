@@ -5,7 +5,7 @@ from pngx.asyncio import asyncio_run
 from pngx.pngx import PaperlessNGX
 
 
-@click.command()
+@click.command
 @click.option("--owner", "-o", help="Owner for uploaded documents")
 @click.option(
     "--group",
@@ -63,18 +63,18 @@ from pngx.pngx import PaperlessNGX
 @click.pass_obj
 @asyncio_run
 async def upload(
-    pngx,
-    filenames,
-    owner,
-    groups,
-    correspondent,
-    correspondent_must_exist,
-    tags,
-    tags_must_exist,
-    dateres,
-    nameres,
-    tries,
-):
+    pngx: PaperlessNGX,
+    filenames: list[pathlib.Path],
+    owner: str | None,
+    groups: list[str],
+    correspondent: str,
+    correspondent_must_exist: bool,
+    tags: list[str],
+    tags_must_exist: bool,
+    dateres: list[str],
+    nameres: list[str],
+    tries: int,
+) -> None:
     """Upload files to Paperless NGX"""
     try:
         async with pngx.connect():

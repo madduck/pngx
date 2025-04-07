@@ -1,9 +1,13 @@
+# needed < 3.14 so that annotations aren't evaluated
+from __future__ import annotations
+
 import asyncio
 import aiohttp
 from aiofile import async_open
 import contextlib
 import re
 import logging
+from yarl import URL
 
 import random
 from pypaperless import Paperless
@@ -16,42 +20,68 @@ from pypaperless.models.common import (
 
 from pngx.wrapper import PaperlessObjectWrapper
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Type, Literal, Any
+    from collections.abc import AsyncGenerator
+    from types import TracebackType
+    import pathlib
+
+    from pngx.wrapper import Cache
+
+    BaseClass = contextlib.AbstractContextManager["PaperlessNGX"]
+else:
+    BaseClass = object
+
+
 logger = logging.getLogger(__name__)
 
 
-class PaperlessNGX:
+class PaperlessNGX(BaseClass):
 
     class Exception(RuntimeError):
         pass
 
+    class APINotConnectedError(Exception):
+        pass
+
     class MissingConfigError(Exception):
-        def __init__(self, arg):
+        def __init__(self, arg: str) -> None:
             super().__init__(f"No {arg} specified, and none in config")
 
     class MissingObjectError(Exception):
         pass
 
-    def __init__(self, *, url, token, no_act=False):
+    def __init__(self, *, url: URL, token: str, no_act: bool = False) -> None:
         self._timeout = aiohttp.ClientTimeout(
             connect=30, sock_connect=30, sock_read=120
         )
         self._url = url
         self._token = token
         self._no_act = no_act
-        self._api = None
-        self._api_users = None
-        self._api_groups = None
-        self._api_tags = None
-        self._api_doctypes = None
+        self._api: Paperless | None = None
+        self._api_users: PaperlessObjectWrapper | None = None
+        self._api_groups: PaperlessObjectWrapper | None = None
+        self._api_tags: PaperlessObjectWrapper | None = None
+        self._api_correspondents: PaperlessObjectWrapper | None = None
+        self._api_doctypes: PaperlessObjectWrapper | None = None
 
-    def __enter__(self):
+    def __enter__(self) -> PaperlessNGX:
         return self
 
-    def __exit__(self, exc_type, exc_info, exc_tb):
-        pass
+    def __exit__(
+        self,
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> Literal[False]:
+        return False
 
     @contextlib.asynccontextmanager
-    async def connect(self, *, url=None, token=None):
+    async def connect(
+        self, *, url: URL | None = None, token: str | None = None
+    ) -> AsyncGenerator[PaperlessNGX, None]:
 
         url = url or self._url
         if not url:
@@ -67,6 +97,9 @@ class PaperlessNGX:
             self._api = await stack.enter_async_context(
                 Paperless(url, token, session=session)
             )
+            if self._api is None:
+                raise self.APINotConnectedError
+
             self._api_users = PaperlessObjectWrapper(
                 self._api.users, namecol="username"
             )
@@ -88,24 +121,38 @@ class PaperlessNGX:
         self._api_correspondents = None
         self._api_doctypes = None
 
-    async def _get_user_id_by_name(self, username, **args):
-        return await self._api_users.get_id_by_name(username, **args)
+    async def _get_user_id_by_name(self, username: str, **args: Any) -> int:
+        if self._api_users is not None:
+            return await self._api_users.get_id_by_name(username, **args)
+        raise self.APINotConnectedError
 
-    async def _get_group_id_by_name(self, groupname, **args):
-        return await self._api_groups.get_id_by_name(groupname, **args)
+    async def _get_group_id_by_name(self, groupname: str, **args: Any) -> int:
+        if self._api_groups is not None:
+            return await self._api_groups.get_id_by_name(groupname, **args)
+        raise self.APINotConnectedError
 
-    async def _get_tag_id_by_name(self, tagname, **args):
-        return await self._api_tags.get_id_by_name(tagname, **args)
+    async def _get_tag_id_by_name(self, tagname: str, **args: Any) -> int:
+        if self._api_tags is not None:
+            return await self._api_tags.get_id_by_name(tagname, **args)
+        raise self.APINotConnectedError
 
-    async def _get_correspondent_id_by_name(self, correspondent, **args):
-        return await self._api_correspondents.get_id_by_name(
-            correspondent, **args
-        )
+    async def _get_correspondent_id_by_name(
+        self, correspondent: str, **args: Any
+    ) -> int:
+        if self._api_correspondents is not None:
+            return await self._api_correspondents.get_id_by_name(
+                correspondent, **args
+            )
+        raise self.APINotConnectedError
 
-    async def _get_doctype_id_by_name(self, doctype, **args):
-        return await self._api_doctypes.get_id_by_name(doctype, **args)
+    async def _get_doctype_id_by_name(self, doctype: str, **args: Any) -> int:
+        if self._api_doctypes is not None:
+            return await self._api_doctypes.get_id_by_name(doctype, **args)
+        raise self.APINotConnectedError
 
-    async def _make_permission_table(self, groups):
+    async def _make_permission_table(
+        self, groups: list[str] | None = None
+    ) -> PermissionTableType:
         if groups:
             return PermissionTableType(
                 view=PermissionSetType(
@@ -122,19 +169,21 @@ class PaperlessNGX:
 
     async def _get_or_make_tags(
         self,
-        tags,
+        tags: list[str],
         *,
-        owner,
-        groups,
-        make=True,
-        is_inbox_tag=False,
-        is_insensitive=True,
-        match="",
-        matching_algorithm=MatchingAlgorithmType.NONE,
-        color="#%06x" % random.randint(0, 2**24),
-    ):
-        perms = await self._make_permission_table(groups)
-        ret = []
+        owner: str | None,
+        groups: list[str] | None,
+        make: bool = True,
+        is_inbox_tag: bool = False,
+        is_insensitive: bool = True,
+        match: str = "",
+        matching_algorithm: MatchingAlgorithmType = MatchingAlgorithmType.NONE,
+        color: str = "#%06x" % random.randint(0, 2**24),
+    ) -> list[int]:
+        perms: PermissionTableType | None = await self._make_permission_table(
+            groups
+        )
+        ret: list[int] = []
         for t in tags:
             try:
                 ret.append(
@@ -167,17 +216,22 @@ class PaperlessNGX:
 
     async def _get_or_make_correspondent(
         self,
-        correspondent,
+        correspondent: str | None,
         *,
-        owner,
-        groups,
-        make=True,
-        is_insensitive=True,
-        match="",
-        matching_algorithm=MatchingAlgorithmType.AUTO,
-        color="#%06x" % random.randint(0, 2**24),
-    ):
-        perms = await self._make_permission_table(groups)
+        owner: str | None = None,
+        groups: list[str] | None = None,
+        make: bool = True,
+        is_insensitive: bool = True,
+        match: str = "",
+        matching_algorithm: MatchingAlgorithmType = MatchingAlgorithmType.AUTO,
+        color: str = "#%06x" % random.randint(0, 2**24),
+    ) -> int | None:
+        if correspondent is None:
+            return None
+
+        perms: PermissionTableType | None = await self._make_permission_table(
+            groups
+        )
         try:
             return await self._get_correspondent_id_by_name(
                 correspondent,
@@ -202,18 +256,18 @@ class PaperlessNGX:
 
     async def upload(
         self,
-        filenames,
+        filenames: list[pathlib.Path],
         *,
-        owner=None,
-        groups=None,
-        correspondent=None,
-        correspondent_must_exist=None,
-        tags=None,
-        tags_must_exist=None,
-        dateres=None,
-        nameres=None,
-        tries=1,
-    ):
+        owner: str | None = None,
+        groups: list[str] | None = None,
+        correspondent: str | None = None,
+        correspondent_must_exist: bool = False,
+        tags: list[str] | None = None,
+        tags_must_exist: bool = False,
+        dateres: list[str] | None = None,
+        nameres: list[str] | None = None,
+        tries: int = 1,
+    ) -> None:
         if not filenames:
             return
 
@@ -221,47 +275,49 @@ class PaperlessNGX:
             raise RuntimeError("API is not connected")
 
         try:
-            tags = await self._get_or_make_tags(
-                tags,
-                make=not tags_must_exist and not self._no_act,
+            if tags is not None:
+                tag_ids: list[int] = await self._get_or_make_tags(
+                    tags,
+                    make=not tags_must_exist and not self._no_act,
+                    owner=owner,
+                    groups=groups,
+                )
+            else:
+                tag_ids = []
+
+        except self.MissingObjectError:
+            if self._no_act and not tags_must_exist:
+                logger.info(f"Would try to create tags: {tags}")
+                tag_ids = []
+            else:
+                raise
+
+        try:
+            correspondent_id = await self._get_or_make_correspondent(
+                correspondent,
+                make=not correspondent_must_exist and not self._no_act,
                 owner=owner,
                 groups=groups,
             )
 
         except self.MissingObjectError:
-            if self._no_act and not tags_must_exist:
-                logger.info(f"Would try to create tags: {tags}")
+            if self._no_act and not correspondent_must_exist:
+                logger.info(
+                    f"Would try to create correspondent: {correspondent}"
+                )
+                correspondent_id = None
             else:
                 raise
 
-        if correspondent:
-            try:
-                _correspondent = await self._get_or_make_correspondent(
-                    correspondent,
-                    make=not correspondent_must_exist and not self._no_act,
-                    owner=owner,
-                    groups=groups,
-                )
-                if not self._no_act:
-                    correspondent = _correspondent
-
-            except self.MissingObjectError:
-                if self._no_act and not correspondent_must_exist:
-                    logger.info(
-                        f"Would try to create correspondent: {correspondent}"
-                    )
-                else:
-                    raise
-
         try:
-            return await asyncio.gather(
+            await asyncio.gather(
                 *[
                     self._upload_single(
                         file,
                         owner=owner,
                         groups=groups,
-                        tags=tags,
-                        correspondent=correspondent,
+                        tags=tag_ids,
+                        correspondent=correspondent_id,
                         dateres=dateres,
                         nameres=nameres,
                     )
@@ -274,18 +330,18 @@ class PaperlessNGX:
 
         return None
 
-    def _make_title(self, filename, nameres):
+    def _make_title(self, filename: str, nameres: list[str] | None) -> str:
 
         for rgx in nameres or []:
 
             if rgx[0] == "s":
-                delim = rgx[1]
-                parts = rgx.split(delim)
+                delim: str = rgx[1]
+                parts: list[str] = rgx.split(delim)
                 if len(parts) not in (3, 4):
                     logger.error(f"Invalid regular expression: {rgx}")
                     continue
 
-                res = re.sub(parts[1], parts[2], filename)
+                res: str = re.sub(parts[1], parts[2], filename)
                 logger.debug(f"namere: {filename} ~= {rgx} → {res}")
                 filename = res
 
@@ -296,13 +352,15 @@ class PaperlessNGX:
         return filename
 
     @staticmethod
-    def _get_creation_date(filename, dateres):
+    def _get_creation_date(
+        filename: str, dateres: list[str]
+    ) -> tuple[str | None, str]:
         for rgx in dateres:
-            m = re.match(rgx, filename)
+            m: re.Match[str] | None = re.match(rgx, filename)
             if not m:
                 continue
 
-            matchdict = m.groupdict()
+            matchdict: dict[str, Any] = m.groupdict()
 
             if ret := matchdict.get("date"):
                 return ret, matchdict.get("remainder", filename)
@@ -311,17 +369,17 @@ class PaperlessNGX:
 
     async def _upload_single(
         self,
-        file,
+        file: pathlib.Path,
         *,
-        owner,
-        groups,
-        tags,
-        correspondent,
-        dateres=None,
-        nameres=None,
-        tries=1,
-    ):
-        filename = str(file.stem)
+        owner: str | None,
+        groups: list[str] | None,
+        tags: list[int] | None,
+        correspondent: int | None,
+        dateres: list[str] | None = None,
+        nameres: list[str] | None = None,
+        tries: int = 1,
+    ) -> int | str | tuple[int, int] | None:
+        filename: str = str(file.stem)
         if dateres:
             creationdate, filename = self._get_creation_date(filename, dateres)
             if creationdate:
@@ -333,11 +391,13 @@ class PaperlessNGX:
         else:
             creationdate = None
 
-        title = self._make_title(filename or str(file.stem), nameres)
+        title: str = self._make_title(filename or str(file.stem), nameres)
 
         logger.debug(f"Title extracted from {file}: {title}")
 
-        async def _do_upload(**kwargs):
+        async def _do_upload(
+            **kwargs: Any,
+        ) -> str | None:
             if self._no_act:
                 logger.info(f"Would upload file {file}:")
                 del kwargs["filename"]
@@ -346,13 +406,16 @@ class PaperlessNGX:
                         logger.info(f"  {k}: {v}")
                 return None
             else:
-                async with async_open(file, "rb") as f:
-                    draft = self._api.documents.draft(
-                        document=await f.read(), **kwargs
-                    )
-                    taskid = await draft.save()
-                logger.info(f"File {file} uploaded, task ID {taskid}")
-                return taskid
+                if self._api is not None:
+                    async with async_open(file, "rb") as f:
+                        draft = self._api.documents.draft(
+                            document=await f.read(), **kwargs
+                        )
+                        taskid: str = await draft.save()
+                    logger.info(f"File {file} uploaded, task ID {taskid}")
+                    return taskid
+                else:
+                    raise self.APINotConnectedError
 
         try:
             return await _do_upload(
@@ -365,7 +428,7 @@ class PaperlessNGX:
 
         except aiohttp.client_exceptions.ServerTimeoutError as err:
             logger.warning(
-                "Connection problem during upload " f"of file {file}: {err}"
+                f"Connection problem during upload of file {file}: {err}"
             )
 
         except pypaperless.exceptions.BadJsonResponseError as err:
@@ -376,7 +439,7 @@ class PaperlessNGX:
 
         except FileNotFoundError as err:
             logger.error(f"File not found: {err.filename}")
-            return
+            return None
 
         except Exception as err:
             logger.exception(
@@ -394,6 +457,7 @@ class PaperlessNGX:
                 owner=owner,
                 groups=groups,
                 tags=tags,
+                correspondent=correspondent,
                 dateres=dateres,
                 nameres=nameres,
                 tries=tries,
@@ -401,7 +465,10 @@ class PaperlessNGX:
 
         else:
             logger.error(f"Upload of {file} failed all retries.")
-            return
+            return None
 
-    async def tags(self):
-        return await self._api_tags.get_all()
+    async def tags(self) -> Cache:
+        if self._api_tags is not None:
+            return await self._api_tags.get_all()
+
+        raise self.APINotConnectedError

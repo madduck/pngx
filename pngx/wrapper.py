@@ -1,11 +1,23 @@
+# needed < 3.14 so that annotations aren't evaluated
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pypaperless.models.common import PermissionTableType
+    from typing import Any
+    from collections.abc import Callable, Mapping
+
+    type Cache = dict[str, int]
+
+
 class PaperlessObjectWrapper:
 
-    def __init__(self, obj, *, namecol="name"):
+    def __init__(self, obj: Any, *, namecol: str = "name") -> None:
         self._obj = obj
-        self._cache = None
         self._namecol = namecol
+        self._cache: Cache = {}
 
-    async def _load_cache(self, *, reload=False):
+    async def _load_cache(self, *, reload: bool = False) -> None:
         if not self._cache or reload:
             self._cache = {
                 getattr(o, self._namecol): o.id async for o in self._obj
@@ -13,14 +25,14 @@ class PaperlessObjectWrapper:
 
     async def get_id_by_name(
         self,
-        name,
+        name: str,
         *,
-        make=False,
-        make_args=None,
-        owner=None,
-        permissions_table=None,
-        draft_cb=None,
-    ):
+        make: bool = False,
+        make_args: Mapping[str, Any] | None = None,
+        owner: str | None = None,
+        permissions_table: PermissionTableType | None = None,
+        draft_cb: Callable[..., None] | None = None,
+    ) -> int:
         try:
             await self._load_cache()
             ret = self._cache[name]
@@ -43,6 +55,6 @@ class PaperlessObjectWrapper:
 
         return ret
 
-    async def get_all(self):
-        await self._load_cache()
+    async def get_all(self, reload: bool = False) -> Cache:
+        await self._load_cache(reload=reload)
         return self._cache.copy()

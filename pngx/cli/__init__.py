@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# needed < 3.14 so that annotations aren't evaluated
+from __future__ import annotations
+
+from typing import Any
 
 import sys
 import click
@@ -12,7 +16,7 @@ from .tags import tags
 from .upload import upload
 
 
-def validate_url(ctx, param, value):
+def validate_url(ctx: click.Context, param: click.Parameter, value: URL) -> URL:
     if value is not None:
         try:
             url = URL(value)
@@ -28,9 +32,11 @@ def validate_url(ctx, param, value):
         except ValueError:
             raise click.BadParameter(f"Not a valid URL: {value}")
 
+    raise click.BadParameter("No URL specified")
+
 
 logging.getLogger("click_extra").setLevel(logging.WARNING)
-logger = clickx.new_extra_logger(
+logger: logging.Logger = clickx.new_extra_logger(
     format=("{asctime} {name} {levelname} {message} " "({filename}:{lineno})"),
     datefmt="%F %T",
     level=logging.WARNING,
@@ -39,9 +45,8 @@ logging.getLogger("asyncio").setLevel(logging.WARNING)
 
 
 @click.group
-@clickx.config_option(show_default=True)
-# @clickx.verbosity_option(default_logger=logger)
-@clickx.verbose_option(default_logger=logger)
+@clickx.config_option(show_default=True)  # type: ignore
+@clickx.verbose_option(default_logger=logger)  # type: ignore
 @click.option(
     "--url",
     "-U",
@@ -59,11 +64,11 @@ logging.getLogger("asyncio").setLevel(logging.WARNING)
 )
 @click.pass_context
 def pngx(
-    ctx,
-    url,
-    token,
-    no_act,
-):
+    ctx: click.Context,
+    url: URL,
+    token: str,
+    no_act: bool,
+) -> None:
     """A command-line interface for Paperless NGX"""
     # if no_act and verbose <= 1:
     #    verbose = 1
@@ -84,8 +89,8 @@ pngx.add_command(tags)
 pngx.add_command(upload)
 
 
-def main():
-    return pngx()
+def main() -> Any:
+    pngx()
 
 
 if __name__ == "__main__":

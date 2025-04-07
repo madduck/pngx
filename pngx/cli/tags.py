@@ -7,7 +7,7 @@ from pngx.pngx import PaperlessNGX
 @click.group()
 @click.pass_obj
 @asyncio_run
-async def tags(pngx):
+async def tags(pngx: PaperlessNGX) -> None:
     """Commands to manipulate tags in Paperless NGX"""
 
 
@@ -25,16 +25,16 @@ async def tags(pngx):
 )
 @click.pass_obj
 @asyncio_run
-async def taglist(pngx, zero, ids):
+async def taglist(pngx: PaperlessNGX, zero: bool, ids: bool) -> None:
     """List the available tags in Paperless NGX"""
     try:
         async with pngx.connect():
             tags = await pngx.tags()
             if ids:
-                tags = [f"{tag} ({id})" for tag, id in tags.items()]
+                tags_list = [f"{tag} ({id})" for tag, id in tags.items()]
             else:
-                tags = tags.keys()
-            click.echo(("\0" if zero else "\n").join(sorted(tags)))
+                tags_list = list(tags.keys())
+            click.echo(("\0" if zero else "\n").join(sorted(tags_list)))
 
     except PaperlessNGX.Exception as err:
         raise click.UsageError(str(err))
