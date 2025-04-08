@@ -1,8 +1,7 @@
-import functools
 import asyncio
-
-from typing import cast, Any, Never
+import functools
 from collections.abc import Callable, Coroutine
+from typing import Any, Never, cast
 
 
 def asyncio_run[T, **P](fn: Callable[P, T]) -> Callable[P, T]:

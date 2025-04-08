@@ -37,4 +37,4 @@ async def taglist(pngx: PaperlessNGX, zero: bool, ids: bool) -> None:
             click.echo(("\0" if zero else "\n").join(sorted(tags_list)))
 
     except PaperlessNGX.Exception as err:
-        raise click.UsageError(str(err))
+        raise click.UsageError(str(err)) from err

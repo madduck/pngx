@@ -2,12 +2,12 @@
 # needed < 3.14 so that annotations aren't evaluated
 from __future__ import annotations
 
+import logging
+import sys
 from typing import Any
 
-import sys
 import click
 import click_extra as clickx
-import logging
 from yarl import URL
 
 from pngx.pngx import PaperlessNGX
@@ -24,20 +24,20 @@ def validate_url(ctx: click.Context, param: click.Parameter, value: URL) -> URL:
                 raise click.BadParameter(f"URL is not absolute: {value}")
             return url
 
-        except TypeError:
+        except TypeError as err:
             raise click.BadParameter(
                 f"URLs must be strings, not '{type(value).__name__}': {value}"
-            )
+            ) from err
 
-        except ValueError:
-            raise click.BadParameter(f"Not a valid URL: {value}")
+        except ValueError as err:
+            raise click.BadParameter(f"Not a valid URL: {value}") from err
 
     raise click.BadParameter("No URL specified")
 
 
 logging.getLogger("click_extra").setLevel(logging.WARNING)
 logger: logging.Logger = clickx.new_extra_logger(
-    format=("{asctime} {name} {levelname} {message} " "({filename}:{lineno})"),
+    format=("{asctime} {name} {levelname} {message} ({filename}:{lineno})"),
     datefmt="%F %T",
     level=logging.WARNING,
 )
@@ -60,7 +60,7 @@ logging.getLogger("asyncio").setLevel(logging.WARNING)
     "-n",
     required=True,
     is_flag=True,
-    help=("Do not actually act, " "just show what would be done"),
+    help=("Do not actually act, just show what would be done"),
 )
 @click.pass_context
 def pngx(

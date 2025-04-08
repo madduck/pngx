@@ -1,5 +1,6 @@
-import click
 import pathlib
+
+import click
 
 from pngx.asyncio import asyncio_run
 from pngx.pngx import PaperlessNGX
@@ -37,8 +38,8 @@ from pngx.pngx import PaperlessNGX
 @click.option(
     "--tags-must-exist/--make-missing-tags",
     help=(
-        "Tags will not be created, but an error produced "
-        "if a tag does not exist"
+        "Tags will not be created, "
+        "but an error produced if a tag does not exist"
     ),
 )
 @click.option(
@@ -92,4 +93,4 @@ async def upload(
             )
 
     except PaperlessNGX.Exception as err:
-        raise click.UsageError(str(err))
+        raise click.UsageError(str(err)) from err

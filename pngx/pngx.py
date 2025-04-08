@@ -2,31 +2,30 @@
 from __future__ import annotations
 
 import asyncio
-import aiohttp
-from aiofile import async_open
 import contextlib
-import re
 import logging
-from yarl import URL
-
 import random
-from pypaperless import Paperless
+import re
+from typing import TYPE_CHECKING
+
+import aiohttp
 import pypaperless.exceptions
+from aiofile import async_open
+from pypaperless import Paperless
 from pypaperless.models.common import (
     MatchingAlgorithmType,
     PermissionSetType,
     PermissionTableType,
 )
+from yarl import URL
 
 from pngx.wrapper import PaperlessObjectWrapper
 
-from typing import TYPE_CHECKING
-
 if TYPE_CHECKING:
-    from typing import Type, Literal, Any
+    import pathlib
     from collections.abc import AsyncGenerator
     from types import TracebackType
-    import pathlib
+    from typing import Any, Literal, Type
 
     from pngx.wrapper import Cache
 
@@ -39,7 +38,6 @@ logger = logging.getLogger(__name__)
 
 
 class PaperlessNGX(BaseClass):
-
     class Exception(RuntimeError):
         pass
 
@@ -82,7 +80,6 @@ class PaperlessNGX(BaseClass):
     async def connect(
         self, *, url: URL | None = None, token: str | None = None
     ) -> AsyncGenerator[PaperlessNGX, None]:
-
         url = url or self._url
         if not url:
             raise self.MissingConfigError("URL")
@@ -190,13 +187,13 @@ class PaperlessNGX(BaseClass):
                     await self._get_tag_id_by_name(
                         t,
                         make=make,
-                        make_args=dict(
-                            is_inbox_tag=is_inbox_tag,
-                            is_insensitive=is_insensitive,
-                            match=match,
-                            matching_algorithm=matching_algorithm,
-                            color=color,
-                        ),
+                        make_args={
+                            "is_inbox_tag": is_inbox_tag,
+                            "is_insensitive": is_insensitive,
+                            "match": match,
+                            "matching_algorithm": matching_algorithm,
+                            "color": color,
+                        },
                         permissions_table=perms,
                         owner=(
                             await self._get_user_id_by_name(owner)
@@ -206,11 +203,11 @@ class PaperlessNGX(BaseClass):
                     )
                 )
 
-            except KeyError:
+            except KeyError as err:
                 raise self.MissingObjectError(
-                    f"Tag '{t}' does not exist "
-                    "(and upload.tags_must_exist is set)"
-                )
+                    f"Tag '{t}' does not exist"
+                    " (and upload.tags_must_exist is set)"
+                ) from err
 
         return ret
 
@@ -236,23 +233,23 @@ class PaperlessNGX(BaseClass):
             return await self._get_correspondent_id_by_name(
                 correspondent,
                 make=make,
-                make_args=dict(
-                    match=match,
-                    is_insensitive=is_insensitive,
-                    matching_algorithm=matching_algorithm,
-                    color=color,
-                ),
+                make_args={
+                    "match": match,
+                    "is_insensitive": is_insensitive,
+                    "matching_algorithm": matching_algorithm,
+                    "color": color,
+                },
                 permissions_table=perms,
                 owner=(
                     await self._get_user_id_by_name(owner) if owner else None
                 ),
             )
 
-        except KeyError:
+        except KeyError as err:
             raise self.MissingObjectError(
                 f"Correspondent '{correspondent}' does not exist "
                 "(and upload.correspondent_must_exist is set)"
-            )
+            ) from err
 
     async def upload(
         self,
@@ -331,9 +328,7 @@ class PaperlessNGX(BaseClass):
         return None
 
     def _make_title(self, filename: str, nameres: list[str] | None) -> str:
-
         for rgx in nameres or []:
-
             if rgx[0] == "s":
                 delim: str = rgx[1]
                 parts: list[str] = rgx.split(delim)
@@ -433,8 +428,8 @@ class PaperlessNGX(BaseClass):
 
         except pypaperless.exceptions.BadJsonResponseError as err:
             logger.warning(
-                "Paperless reported an error with the upload "
-                f"of file {file}: {err}"
+                "Paperless reported an error with "
+                f"the upload of file {file}: {err}"
             )
 
         except FileNotFoundError as err:
@@ -443,14 +438,11 @@ class PaperlessNGX(BaseClass):
 
         except Exception as err:
             logger.exception(
-                "Received other exception during upload "
-                f"of file {file}: {err}"
+                f"Received other exception during upload of file {file}: {err}"
             )
 
         if (tries := tries - 1) > 0:
-            logger.info(
-                f"Upload of {file} failed, " f"retrying {tries} time(s)…"
-            )
+            logger.info(f"Upload of {file} failed, retrying {tries} time(s)…")
             await asyncio.sleep(1)
             return await self._upload_single(
                 file,

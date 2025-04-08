@@ -1,17 +1,18 @@
 # needed < 3.14 so that annotations aren't evaluated
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pypaperless.models.common import PermissionTableType
-    from typing import Any
     from collections.abc import Callable, Mapping
+    from typing import Any
+
+    from pypaperless.models.common import PermissionTableType
 
     type Cache = dict[str, int]
 
 
 class PaperlessObjectWrapper:
-
     def __init__(self, obj: Any, *, namecol: str = "name") -> None:
         self._obj = obj
         self._namecol = namecol
