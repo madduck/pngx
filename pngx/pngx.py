@@ -328,6 +328,7 @@ class PaperlessNGX(BaseClass):
         return None
 
     def _make_title(self, filename: str, nameres: list[str] | None) -> str:
+        title: str = filename
         for rgx in nameres or []:
             if rgx[0] == "s":
                 delim: str = rgx[1]
@@ -336,15 +337,15 @@ class PaperlessNGX(BaseClass):
                     logger.error(f"Invalid regular expression: {rgx}")
                     continue
 
-                res: str = re.sub(parts[1], parts[2], filename)
-                logger.debug(f"namere: {filename} ~= {rgx} → {res}")
-                filename = res
+                title = re.sub(parts[1], parts[2], title)
+                logger.debug(f"namere: {title} ~= {rgx} → {title}")
 
             else:
                 logger.error(f"Regular expression must start with 's': {rgx}")
                 continue
 
-        return filename
+        logger.debug(f"Title extracted from file name {filename}: {title}")
+        return title
 
     @staticmethod
     def _get_creation_date(
@@ -358,9 +359,52 @@ class PaperlessNGX(BaseClass):
             matchdict: dict[str, Any] = m.groupdict()
 
             if ret := matchdict.get("date"):
+                logger.debug(f"Extracted date {ret} from file named {filename}")
                 return ret, matchdict.get("remainder", filename)
 
+        logger.debug(f"Failed to extract date from file named {filename}")
         return None, filename
+
+    def _parse_filename(
+        self,
+        file: pathlib.Path,
+        dateres: list[str] | None = None,
+        nameres: list[str] | None = None,
+    ) -> tuple[str | None, str]:
+        filename: str = str(file.stem)
+        if dateres:
+            creationdate, filename = self._get_creation_date(filename, dateres)
+        else:
+            creationdate = None
+
+        return (
+            creationdate,
+            self._make_title(filename or str(file.stem), nameres),
+        )
+
+    async def _do_upload(
+        self,
+        file: pathlib.Path,
+        **kwargs: Any,
+    ) -> str | None:
+        if self._no_act:
+            logger.info(f"Would upload file {file}:")
+            del kwargs["file"]
+            for k, v in kwargs.items():
+                if v is not None and v != []:
+                    logger.info(f"  {k}: {v}")
+            return None
+        else:
+            if self._api is not None:
+                async with async_open(file, "rb") as f:
+                    draft = self._api.documents.draft(
+                        document=await f.read(), filename=file.name, **kwargs
+                    )
+                    taskid: str = await draft.save()
+                logger.info(f"File {file} uploaded, task ID {taskid}")
+                return taskid
+            else:
+                raise self.APINotConnectedError
 
     async def _upload_single(
         self,
@@ -374,47 +418,11 @@ class PaperlessNGX(BaseClass):
         nameres: list[str] | None = None,
         tries: int = 1,
     ) -> int | str | tuple[int, int] | None:
-        filename: str = str(file.stem)
-        if dateres:
-            creationdate, filename = self._get_creation_date(filename, dateres)
-            if creationdate:
-                logger.debug(
-                    f"Extracted date {creationdate} from filename {file}"
-                )
-            else:
-                logger.debug(f"Failed to extract date from filename {file}")
-        else:
-            creationdate = None
-
-        title: str = self._make_title(filename or str(file.stem), nameres)
-
-        logger.debug(f"Title extracted from {file}: {title}")
-
-        async def _do_upload(
-            **kwargs: Any,
-        ) -> str | None:
-            if self._no_act:
-                logger.info(f"Would upload file {file}:")
-                del kwargs["filename"]
-                for k, v in kwargs.items():
-                    if v is not None and v != []:
-                        logger.info(f"  {k}: {v}")
-                return None
-            else:
-                if self._api is not None:
-                    async with async_open(file, "rb") as f:
-                        draft = self._api.documents.draft(
-                            document=await f.read(), **kwargs
-                        )
-                        taskid: str = await draft.save()
-                    logger.info(f"File {file} uploaded, task ID {taskid}")
-                    return taskid
-                else:
-                    raise self.APINotConnectedError
+        creationdate, title = self._parse_filename(file)
 
         try:
-            return await _do_upload(
-                filename=file.name,
+            return await self._do_upload(
+                file=file,
                 title=title,
                 tags=tags,
                 correspondent=correspondent,
