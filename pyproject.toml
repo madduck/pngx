@@ -5,9 +5,6 @@ build-backend = "hatchling.build"
 [tool.setuptools_scm]
 write_to = "_version.py"
 
-[project.scripts]
-pngx = "pngx.cli:main"
-
 [project]
 name = "pngx"
 version = "0.0.1"
@@ -33,22 +30,19 @@ dependencies = [
 [project.optional-dependencies]
 dev= [
   "ipdb",
-  "black",
-  "flake8",
   "mypy",
+  "ruff",
   "pre-commit"
 ]
 
-[tool.black]
+[project.scripts]
+pngx = "pngx.cli:main"
+
+[tool.ruff]
 line-length = 80
-exclude = '''
-/(
-    \.git
-  | \.tox
-  | __pycache__
-  | .direnv
-)/
-'''
+
+[tool.ruff.lint]
+select = ["B", "C", "E", "F", "I", "W", "B9"]
 
 [tool.mypy]
 strict = true
